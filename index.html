@@ -59,23 +59,21 @@
             transition: background-color 0.2s;
             width: 100%;
         }
-        .copy-btn:hover {
-            background-color: #1557b0;
-        }
-        .copy-btn:active {
-            background-color: #174ea6;
-        }
-        .footer {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #999;
-        }
+        .copy-btn:hover { background-color: #1557b0; }
+        .copy-btn:active { background-color: #174ea6; }
+        .copy-btn:disabled { background-color: #ccc; cursor: default; }
         .success-msg {
             color: #188038;
             font-size: 14px;
             margin-top: 10px;
             display: none;
         }
+        .countdown {
+            margin-top: 16px;
+            font-size: 13px;
+            color: #999;
+        }
+        .countdown.urgent { color: #d93025; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -87,10 +85,7 @@
 
         <button class="copy-btn" id="copy-btn">Copy Command</button>
         <div class="success-msg" id="success-msg">Command copied to clipboard!</div>
-        
-        <div class="footer">
-            This command expires quickly. If it fails, restart the auth flow.
-        </div>
+        <div class="countdown" id="countdown"></div>
     </div>
 
     <script>
@@ -100,27 +95,46 @@
         const commandDisplay = document.getElementById('command-display');
         const copyBtn = document.getElementById('copy-btn');
         const successMsg = document.getElementById('success-msg');
+        const countdownEl = document.getElementById('countdown');
         const authCommand = code ? `/auth ${code}${state ? ` ${state}` : ''}` : '';
+
+        // Clear code from browser history so it doesn't linger in URL bar
+        if (code && window.history && window.history.replaceState) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
 
         if (code) {
             commandDisplay.textContent = authCommand;
+
+            // 10-minute countdown (Google auth codes expire in ~10 min)
+            const expiresAt = Date.now() + 10 * 60 * 1000;
+            function updateCountdown() {
+                const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+                const m = Math.floor(remaining / 60);
+                const s = remaining % 60;
+                countdownEl.textContent = remaining > 0
+                    ? `Expires in ${m}:${String(s).padStart(2, '0')}`
+                    : 'Expired — restart the auth flow';
+                countdownEl.className = 'countdown' + (remaining < 60 ? ' urgent' : '');
+                if (remaining > 0) setTimeout(updateCountdown, 1000);
+                else {
+                    copyBtn.disabled = true;
+                    commandDisplay.style.color = '#d93025';
+                }
+            }
+            updateCountdown();
         } else {
             commandDisplay.textContent = 'No OAuth command could be built from this URL.';
             commandDisplay.style.color = '#d93025';
             copyBtn.disabled = true;
-            copyBtn.style.backgroundColor = '#ccc';
         }
 
         copyBtn.addEventListener('click', () => {
             if (authCommand) {
                 navigator.clipboard.writeText(authCommand).then(() => {
                     successMsg.style.display = 'block';
-                    setTimeout(() => {
-                        successMsg.style.display = 'none';
-                    }, 3000);
-                }).catch(err => {
-                    console.error('Failed to copy: ', err);
-                });
+                    setTimeout(() => { successMsg.style.display = 'none'; }, 3000);
+                }).catch(() => {});
             }
         });
     </script>
